@@ -181,6 +181,10 @@ type Viper struct {
 
 	onConfigChange       func(fsnotify.Event)
 	onRemoteConfigChange func()
+
+	// Store read properties on the object so that we can write back in order with comments.
+	// This will only be used if the configuration read is a properties file.
+	properties *properties.Properties
 }
 
 // New returns an initialized Viper instance.
