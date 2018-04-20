@@ -219,6 +219,8 @@ type defaultRemoteProvider struct {
 	endpoint      string
 	path          string
 	secretKeyring string
+	username      string
+	password      string
 }
 
 func (rp defaultRemoteProvider) Provider() string {
@@ -237,6 +239,14 @@ func (rp defaultRemoteProvider) SecretKeyring() string {
 	return rp.secretKeyring
 }
 
+func (rp defaultRemoteProvider) Username() string {
+	return rp.username
+}
+
+func (rp defaultRemoteProvider) Password() string {
+	return rp.password
+}
+
 // RemoteProvider stores the configuration necessary
 // to connect to a remote key/value store.
 // Optional secretKeyring to unencrypt encrypted values
@@ -246,6 +256,8 @@ type RemoteProvider interface {
 	Endpoint() string
 	Path() string
 	SecretKeyring() string
+	Username() string
+	Password() string
 }
 
 // SupportedExts are universally supported extensions.

@@ -83,7 +83,7 @@ func getConfigManager(rp viper.RemoteProvider) (crypt.ConfigManager, error) {
 			return nil, err
 		}
 		if rp.Provider() == "etcd" {
-			cm, err = crypt.NewEtcdConfigManager([]string{rp.Endpoint()}, kr)
+			cm, err = crypt.NewEtcdConfigManagerAuth([]string{rp.Endpoint()}, rp.Username(), rp.Password(), kr)
 		} else {
 			cm, err = crypt.NewConsulConfigManager([]string{rp.Endpoint()}, kr)
 		}
