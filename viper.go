@@ -70,7 +70,7 @@ func init() {
 type remoteConfigFactory interface {
 	Get(rp RemoteProvider) (io.Reader, error)
 	Watch(rp RemoteProvider) (io.Reader, error)
-	WatchChannel(rp RemoteProvider) (<-chan *RemoteResponse, chan bool)
+	WatchChannel(rp RemoteProvider) (<-chan *RemoteResponse, chan bool, error)
 }
 
 // RemoteConfig is optional, see the remote package
@@ -1562,7 +1562,10 @@ func (v *Viper) getRemoteConfig(provider RemoteProvider) (map[string]interface{}
 // Retrieve the first found remote configuration.
 func (v *Viper) watchKeyValueConfigOnChannel() error {
 	for _, rp := range v.remoteProviders {
-		respc, _ := RemoteConfig.WatchChannel(rp)
+		respc, _, err := RemoteConfig.WatchChannel(rp)
+		if err != nil {
+			return err
+		}
 		//Todo: Add quit channel
 
 		b := <-respc
