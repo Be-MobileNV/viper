@@ -8,96 +8,94 @@ package remote
 
 import (
 	"bytes"
+	"context"
 	"io"
-	"os"
+	"strings"
+	"time"
 
-	crypt "github.com/Be-MobileNV/crypt/config"
 	"github.com/Be-MobileNV/viper"
+	"github.com/coreos/etcd/clientv3"
 )
 
-type remoteConfigProvider struct{}
+type remoteConfigProvider struct {
+	client *clientv3.Client
+}
 
 func (rc remoteConfigProvider) Get(rp viper.RemoteProvider) (io.Reader, error) {
-	cm, err := getConfigManager(rp)
+	if rc.client == nil {
+		var err error
+		rc.client, err = getConfigManager(rp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	r, err := rc.client.Get(context.Background(), rp.Path())
 	if err != nil {
 		return nil, err
 	}
-	b, err := cm.Get(rp.Path())
-	if err != nil {
-		return nil, err
-	}
-	return bytes.NewReader(b), nil
+	return bytes.NewReader(r.Kvs[0].Value), nil
 }
 
 func (rc remoteConfigProvider) Watch(rp viper.RemoteProvider) (io.Reader, error) {
-	cm, err := getConfigManager(rp)
-	if err != nil {
-		return nil, err
+	if rc.client == nil {
+		var err error
+		rc.client, err = getConfigManager(rp)
+		if err != nil {
+			return nil, err
+		}
 	}
-	resp, err := cm.Get(rp.Path())
-	if err != nil {
-		return nil, err
+	w := rc.client.Watch(context.Background(), rp.Path())
+	resp := <-w
+	if resp.Err() != nil {
+		return nil, resp.Err()
 	}
-
-	return bytes.NewReader(resp), nil
+	val := resp.Events[0].Kv.Value
+	return bytes.NewReader(val), nil
 }
 
-func (rc remoteConfigProvider) WatchChannel(rp viper.RemoteProvider) (<-chan *viper.RemoteResponse, chan bool) {
-	cm, err := getConfigManager(rp)
-	if err != nil {
-		return nil, nil
-	}
-	quit := make(chan bool)
-	quitwc := make(chan bool)
+func (rc remoteConfigProvider) WatchChannel(rp viper.RemoteProvider) (responseChannel <-chan *viper.RemoteResponse, quitwc chan bool, err error) {
+	quitwc = make(chan bool)
 	viperResponsCh := make(chan *viper.RemoteResponse)
-	cryptoResponseCh := cm.Watch(rp.Path(), quit)
-	// need this function to convert the Channel response form crypt.Response to viper.Response
-	go func(cr <-chan *crypt.Response, vr chan<- *viper.RemoteResponse, quitwc <-chan bool, quit chan<- bool) {
+	if rc.client == nil {
+		var err error
+		rc.client, err = getConfigManager(rp)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	w := rc.client.Watch(ctx, rp.Path())
+	go func(etcdResponseChannel clientv3.WatchChan, vr chan<- *viper.RemoteResponse, quitwc <-chan bool, cancel context.CancelFunc) {
 		for {
 			select {
 			case <-quitwc:
-				quit <- true
+				cancel()
 				return
-			case resp := <-cr:
+			case resp := <-etcdResponseChannel:
 				vr <- &viper.RemoteResponse{
-					Error: resp.Error,
-					Value: resp.Value,
+					Error: resp.Err(),
+					Value: resp.Events[0].Kv.Value,
 				}
 
 			}
 
 		}
-	}(cryptoResponseCh, viperResponsCh, quitwc, quit)
-
-	return viperResponsCh, quitwc
+	}(w, viperResponsCh, quitwc, cancel)
+	return viperResponsCh, quitwc, nil
 }
 
-func getConfigManager(rp viper.RemoteProvider) (crypt.ConfigManager, error) {
-	var cm crypt.ConfigManager
-	var err error
-
-	if rp.SecretKeyring() != "" {
-		kr, err := os.Open(rp.SecretKeyring())
-		defer kr.Close()
-		if err != nil {
-			return nil, err
-		}
-		if rp.Provider() == "etcd" {
-			cm, err = crypt.NewEtcdConfigManagerAuth([]string{rp.Endpoint()}, rp.Username(), rp.Password(), kr)
-		} else {
-			cm, err = crypt.NewConsulConfigManager([]string{rp.Endpoint()}, kr)
-		}
-	} else {
-		if rp.Provider() == "etcd" {
-			cm, err = crypt.NewStandardEtcdConfigManager([]string{rp.Endpoint()})
-		} else {
-			cm, err = crypt.NewStandardConsulConfigManager([]string{rp.Endpoint()})
-		}
+func getConfigManager(rp viper.RemoteProvider) (*clientv3.Client, error) {
+	etcdConfig := clientv3.Config{
+		Endpoints:   strings.Split(rp.Endpoint(), ","),
+		DialTimeout: 5 * time.Second,
+		Username:    rp.Username(),
+		Password:    rp.Password(),
 	}
+	client, err := clientv3.New(etcdConfig)
 	if err != nil {
 		return nil, err
 	}
-	return cm, nil
+	return client, nil
 }
 
 func init() {
