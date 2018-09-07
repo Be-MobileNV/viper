@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/Be-MobileNV/viper",
+	"ImportPath": "github.com/bertpersyn/viper",
 	"GoVersion": "go1.10",
 	"GodepVersion": "v80",
 	"Deps": [
