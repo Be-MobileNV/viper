@@ -16,6 +16,25 @@ Many Go projects are built using Viper including:
 [![Build Status](https://travis-ci.org/spf13/viper.svg)](https://travis-ci.org/spf13/viper) [![Join the chat at https://gitter.im/spf13/viper](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/spf13/viper?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![GoDoc](https://godoc.org/github.com/spf13/viper?status.svg)](https://godoc.org/github.com/spf13/viper)
 
 
+## Adjustments Be-Mobile
+
+What did we adjust?
+
+* added a username/password field on the defaultRemoteProvider, also the interface reflects this
+* adjusted Viper's AddRemoteProvider function, accepting username password
+
+TBH: we should refactor this code so providers can be added to Viper in a transparent way:
+
+```
+type RemoteProvider interface {
+	Provider() string
+	Endpoint() string
+	Path() string
+}
+```
+
+ETCD, CONSUL or others just need to make structs that adhere this interface. In the constructor of these structs, you can pass keyring, username/password. The interface doesn't need to know about the authentication! 
+
 ## What is Viper?
 
 Viper is a complete configuration solution for Go applications including 12-Factor apps. It is designed
