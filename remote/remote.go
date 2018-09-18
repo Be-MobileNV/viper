@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bertpersyn/viper"
+	"github.com/Be-MobileNV/viper"
 	"github.com/coreos/etcd/clientv3"
 )
 
