@@ -9,12 +9,13 @@ package remote
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"strings"
 	"time"
 
 	"github.com/Be-MobileNV/viper"
-	"github.com/coreos/etcd/clientv3"
+	"go.etcd.io/etcd/clientv3"
 )
 
 type remoteConfigProvider struct {
@@ -33,6 +34,11 @@ func (rc remoteConfigProvider) Get(rp viper.RemoteProvider) (io.Reader, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if len(r.Kvs) < 1 {
+		return nil, fmt.Errorf("no key-value pairs matched the request")
+	}
+
 	return bytes.NewReader(r.Kvs[0].Value), nil
 }
 
@@ -48,6 +54,9 @@ func (rc remoteConfigProvider) Watch(rp viper.RemoteProvider) (io.Reader, error)
 	resp := <-w
 	if resp.Err() != nil {
 		return nil, resp.Err()
+	}
+	if len(resp.Events) < 1 {
+		return nil, fmt.Errorf("no watch events found")
 	}
 	val := resp.Events[0].Kv.Value
 	return bytes.NewReader(val), nil
@@ -72,8 +81,22 @@ func (rc remoteConfigProvider) WatchChannel(rp viper.RemoteProvider) (responseCh
 				cancel()
 				return
 			case resp := <-etcdResponseChannel:
+
+				if err := resp.Err(); err != nil {
+					vr <- &viper.RemoteResponse{
+						Error: err,
+					}
+					continue
+				}
+
+				if len(resp.Events) < 1 {
+					vr <- &viper.RemoteResponse{
+						Error: fmt.Errorf("no watch events found"),
+					}
+					continue
+				}
+
 				vr <- &viper.RemoteResponse{
-					Error: resp.Err(),
 					Value: resp.Events[0].Kv.Value,
 				}
 
